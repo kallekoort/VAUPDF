@@ -4,14 +4,30 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using Microsoft.VisualBasic.ApplicationServices;
+using Microsoft.Web.WebView2.Core;
 
 namespace VAUPDF
 {
     internal static class Program
     {
+
         [STAThread]
         static void Main(string[] args)
         {
+            string loaderPath = Path.Combine(
+                AppContext.BaseDirectory,
+                "runtimes",
+                "win-x64",
+                "native"
+            );
+
+            if (File.Exists(Path.Combine(
+                loaderPath, "WebView2Loader.dll")))
+            {
+                CoreWebView2Environment.SetLoaderDllFolderPath(
+                    loaderPath);
+            }
+
             ApplicationConfiguration.Initialize();
 
             string[] files = args
@@ -21,6 +37,7 @@ namespace VAUPDF
 
             new SingleInstanceApp().Run(files);
         }
+
     }
 
     internal sealed class SingleInstanceApp
