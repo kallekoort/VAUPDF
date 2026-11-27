@@ -15,13 +15,19 @@ namespace VAUPDF
     public partial class Form1 : Form
     {
         private readonly TabControl tabs = new();
+        private readonly MenuStrip menubar = new();
         private readonly ToolStrip toolbar = new();
         private readonly StatusStrip statusbar = new();
         private readonly ToolStripStatusLabel status = new();
-        private readonly ToolStripDropDownButton recentMenu = new("Hiljutised");
+
+        private readonly ToolStripMenuItem recentMenu = new("&Recent files");
+        private readonly ToolStripMenuItem closeMenu = new("&Close");
+        private readonly ToolStripButton printButton;
+        private readonly ToolStripButton saveAsButton;
 
         private readonly List<string> recentFiles = new();
 
+        // Rakenduse seadistuste kaust
         private readonly string dataFolder = Path.Combine(
             Environment.GetFolderPath(
                 Environment.SpecialFolder.LocalApplicationData),
@@ -30,9 +36,10 @@ namespace VAUPDF
         private string RecentFilePath =>
             Path.Combine(dataFolder, "recent.json");
 
-        private bool fullscreen = false;
-        private FormWindowState previousWindowState;
-        private Rectangle previousBounds;
+        // Rakenduse versioon projektifailist
+        private static string AppVersion =>
+            typeof(Form1).Assembly.GetName().Version?
+                .ToString(3) ?? "0.0.0";
 
         public Form1()
         {
@@ -48,28 +55,55 @@ namespace VAUPDF
                 Application.ExecutablePath)
                 ?? SystemIcons.Application;
 
-            // Tööriistariba
+            // ==========================================
+            // MENÜÜ JA TÖÖRIISTARIBA
+            // ==========================================
+
+            menubar.Dock = DockStyle.Top;
+            menubar.RenderMode = ToolStripRenderMode.System;
+            menubar.ShowItemToolTips = true;
+
+            ToolStripMenuItem fileMenu = new("&File");
+            ToolStripMenuItem openMenu = new("&Open...")
+            {
+                ShortcutKeys = Keys.Control | Keys.O
+            };
+            openMenu.Click += (s, e) => OpenDialog();
+
+            closeMenu.ShortcutKeys = Keys.Control | Keys.W;
+            closeMenu.Click += (s, e) => CloseTab(tabs.SelectedTab);
+
+            ToolStripMenuItem exitMenu = new("E&xit")
+            {
+                ShortcutKeys = Keys.Alt | Keys.F4
+            };
+            exitMenu.Click += (s, e) => Close();
+
+            fileMenu.DropDownItems.AddRange(new ToolStripItem[]
+            {
+                openMenu, closeMenu, recentMenu,
+                new ToolStripSeparator(), exitMenu
+            });
+            menubar.Items.Add(fileMenu);
+
+            MainMenuStrip = menubar;
+
             toolbar.Dock = DockStyle.Top;
             toolbar.GripStyle = ToolStripGripStyle.Hidden;
             toolbar.Padding = new Padding(6);
             toolbar.RenderMode = ToolStripRenderMode.System;
 
-            AddButton("Ava PDF", () => OpenDialog(), "Ctrl+O");
-            AddButton("Prindi", PrintPdf, "Ctrl+P");
+            toolbar.ImageScalingSize = new Size(24, 24);
+            printButton = CreateIconButton(
+                "Print", "\uE749", PrintPdf, "Print (Ctrl+P)");
+            saveAsButton = CreateIconButton(
+                "Save As", "\uE792", SavePdfAs, "Save As (Ctrl+Shift+S)");
+            toolbar.Items.AddRange(new ToolStripItem[] { printButton, saveAsButton });
 
-            toolbar.Items.Add(new ToolStripSeparator());
-            toolbar.Items.Add(recentMenu);
-            toolbar.Items.Add(new ToolStripSeparator());
+            // ==========================================
+            // VAHEKAARDID
+            // ==========================================
 
-            AddButton("Sulge", () => CloseTab(tabs.SelectedTab), "Ctrl+W");
-            AddButton("Täisekraan", ToggleFullscreen, "F11");
-
-            toolbar.Items.Add(new ToolStripSeparator());
-
-            toolbar.Items.Add(new ToolStripLabel(
-                "Lohista PDF-failid siia"));
-
-            // Vahekaardid
             tabs.Dock = DockStyle.Fill;
             tabs.DrawMode = TabDrawMode.OwnerDrawFixed;
             tabs.Padding = new Point(22, 6);
@@ -77,46 +111,79 @@ namespace VAUPDF
 
             tabs.DrawItem += DrawTab;
             tabs.MouseDown += TabMouseDown;
-            tabs.SelectedIndexChanged += (s, e) => UpdateStatus();
 
-            // Alumine olekuriba
+            tabs.SelectedIndexChanged +=
+                (s, e) => UpdateStatus();
+
+            // ==========================================
+            // OLEKURIBA
+            // ==========================================
+
             statusbar.Dock = DockStyle.Bottom;
             status.Spring = true;
             status.TextAlign = ContentAlignment.MiddleLeft;
 
             statusbar.Items.Add(status);
-            statusbar.Items.Add(
-                new ToolStripStatusLabel("VAUPDF v0.3"));
 
+            statusbar.Items.Add(
+                new ToolStripStatusLabel(
+                    $"VAUPDF v{AppVersion}"));
+
+            // Kasutajaliidese lisamine
             Controls.Add(tabs);
             Controls.Add(statusbar);
             Controls.Add(toolbar);
+            Controls.Add(menubar);
 
-            EnableDragDrop(this);
-            EnableDragDrop(toolbar);
-            EnableDragDrop(tabs);
-
+            // Hiljutised failid
             LoadRecentFiles();
             UpdateRecentMenu();
             UpdateStatus();
         }
 
-        // Tööriistariba nupud
-        private void AddButton(
-            string text, Action action, string shortcut)
+        // ==============================================
+        // TÖÖRIISTARIBA NUPUD
+        // ==============================================
+
+        private static ToolStripButton CreateIconButton(
+            string text,
+            string glyph,
+            Action action,
+            string tooltip)
         {
+            Bitmap image = new(32, 32);
+            using (Graphics graphics = Graphics.FromImage(image))
+            using (Font font = new("Segoe MDL2 Assets", 24, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (SolidBrush brush = new(SystemColors.ControlText))
+            using (StringFormat format = new()
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center
+            })
+            {
+                graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                graphics.DrawString(glyph, font, brush, new RectangleF(0, 0, 32, 32), format);
+            }
+
             ToolStripButton button = new(text)
             {
-                DisplayStyle = ToolStripItemDisplayStyle.Text,
-                ToolTipText = $"{text} ({shortcut})",
+                Image = image,
+                DisplayStyle = ToolStripItemDisplayStyle.Image,
+                AccessibleName = text,
+                ToolTipText = tooltip,
                 Padding = new Padding(5)
             };
 
             button.Click += (s, e) => action();
-            toolbar.Items.Add(button);
+            button.Disposed += (s, e) => image.Dispose();
+
+            return button;
         }
 
-        // Failivaliku dialoog
+        // ==============================================
+        // FAILIVALIKU DIALOOG
+        // ==============================================
+
         private async void OpenDialog()
         {
             using OpenFileDialog dialog = new()
@@ -127,11 +194,17 @@ namespace VAUPDF
             };
 
             if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
                 await OpenFilesAsync(dialog.FileNames);
+            }
         }
 
-        // Mitme faili avamine
-        public async Task OpenFilesAsync(IEnumerable<string> files)
+        // ==============================================
+        // MITME FAILI AVAMINE
+        // ==============================================
+
+        public async Task OpenFilesAsync(
+            IEnumerable<string> files)
         {
             foreach (string file in files)
             {
@@ -142,7 +215,10 @@ namespace VAUPDF
             }
         }
 
-        // PDF avamine
+        // ==============================================
+        // PDF-FAILI AVAMINE
+        // ==============================================
+
         private async Task OpenPdf(string filePath)
         {
             TabPage? page = null;
@@ -156,7 +232,9 @@ namespace VAUPDF
                     Path.GetExtension(filePath),
                     ".pdf",
                     StringComparison.OrdinalIgnoreCase))
+                {
                     return;
+                }
 
                 filePath = Path.GetFullPath(filePath);
 
@@ -174,6 +252,7 @@ namespace VAUPDF
                     }
                 }
 
+                // Loo uus vahekaart
                 page = new TabPage
                 {
                     Text = Path.GetFileName(filePath),
@@ -181,18 +260,22 @@ namespace VAUPDF
                     Tag = filePath
                 };
 
+                // WebView2 komponent
                 WebView2 viewer = new()
                 {
                     Dock = DockStyle.Fill,
+
                     CreationProperties =
                         new CoreWebView2CreationProperties
                         {
                             UserDataFolder = Path.Combine(
-                                dataFolder, "WebView2")
+                                dataFolder,
+                                "WebView2")
                         }
                 };
 
                 page.Controls.Add(viewer);
+
                 tabs.TabPages.Add(page);
                 tabs.SelectedTab = page;
 
@@ -201,11 +284,13 @@ namespace VAUPDF
                 if (viewer.IsDisposed || page.IsDisposed)
                     return;
 
+                // Failide lohistamine on keelatud
                 viewer.AllowExternalDrop = false;
 
-                // Kiirklahvid ka siis, kui PDF on fookuses
+                // Kiirklahvid PDF-vaaturi fookuses
                 viewer.KeyDown += ViewerKeyDown;
 
+                // Ava PDF
                 viewer.Source = new Uri(filePath);
 
                 RememberFile(filePath);
@@ -233,13 +318,19 @@ namespace VAUPDF
             }
         }
 
-        // Aktiivne PDF-vaatur
+        // ==============================================
+        // AKTIIVNE PDF-VAATUR
+        // ==============================================
+
         private WebView2? ActiveViewer =>
             tabs.SelectedTab?.Controls
                 .OfType<WebView2>()
                 .FirstOrDefault();
 
-        // Printimine
+        // ==============================================
+        // PRINTIMINE
+        // ==============================================
+
         private void PrintPdf()
         {
             try
@@ -249,11 +340,53 @@ namespace VAUPDF
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "Printimise viga");
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    "Printimise viga",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 
-        // Vahekaardi sulgemine
+        private void SavePdfAs()
+        {
+            if (tabs.SelectedTab?.Tag is not string sourcePath)
+                return;
+
+            try
+            {
+                using SaveFileDialog dialog = new()
+                {
+                    Filter = "PDF failid (*.pdf)|*.pdf",
+                    Title = "Save As",
+                    FileName = Path.GetFileName(sourcePath),
+                    DefaultExt = "pdf",
+                    AddExtension = true,
+                    OverwritePrompt = true
+                };
+
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                string destinationPath = Path.GetFullPath(dialog.FileName);
+                if (string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase))
+                    return;
+
+                File.Copy(sourcePath, destinationPath, overwrite: true);
+                RememberFile(destinationPath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Salvestamise viga",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // ==============================================
+        // VAHEKAARDI SULGEMINE
+        // ==============================================
+
         private void CloseTab(TabPage? page)
         {
             if (page == null)
@@ -261,10 +394,14 @@ namespace VAUPDF
 
             tabs.TabPages.Remove(page);
             page.Dispose();
+
             UpdateStatus();
         }
 
-        // Sulgemisristi asukoht
+        // ==============================================
+        // SULGEMISRISTI ASUKOHT
+        // ==============================================
+
         private Rectangle CloseRectangle(int index)
         {
             Rectangle r = tabs.GetTabRect(index);
@@ -276,14 +413,21 @@ namespace VAUPDF
                 16);
         }
 
-        // Vahekaartide kujundus
-        private void DrawTab(object? sender, DrawItemEventArgs e)
+        // ==============================================
+        // VAHEKAARTIDE KUJUNDUS
+        // ==============================================
+
+        private void DrawTab(
+            object? sender,
+            DrawItemEventArgs e)
         {
             if (e.Index < 0 || e.Index >= tabs.TabCount)
                 return;
 
             Rectangle r = tabs.GetTabRect(e.Index);
-            bool selected = e.Index == tabs.SelectedIndex;
+
+            bool selected =
+                e.Index == tabs.SelectedIndex;
 
             using SolidBrush background = new(
                 selected
@@ -315,18 +459,24 @@ namespace VAUPDF
 
             e.Graphics.DrawLine(
                 pen,
-                close.Left + 4, close.Top + 4,
-                close.Right - 4, close.Bottom - 4);
+                close.Left + 4,
+                close.Top + 4,
+                close.Right - 4,
+                close.Bottom - 4);
 
             e.Graphics.DrawLine(
                 pen,
-                close.Right - 4, close.Top + 4,
-                close.Left + 4, close.Bottom - 4);
+                close.Right - 4,
+                close.Top + 4,
+                close.Left + 4,
+                close.Bottom - 4);
 
+            // Aktiivse vahekaardi punane joon
             if (selected)
             {
                 using Pen activePen = new(
-                    Color.FromArgb(185, 37, 54), 3);
+                    Color.FromArgb(185, 37, 54),
+                    3);
 
                 e.Graphics.DrawLine(
                     activePen,
@@ -337,8 +487,13 @@ namespace VAUPDF
             }
         }
 
-        // Sulgemisrist või hiire keskmine nupp
-        private void TabMouseDown(object? sender, MouseEventArgs e)
+        // ==============================================
+        // SULGEMISRIST JA HIIRE KESKMINE NUPP
+        // ==============================================
+
+        private void TabMouseDown(
+            object? sender,
+            MouseEventArgs e)
         {
             for (int i = 0; i < tabs.TabCount; i++)
             {
@@ -358,27 +513,37 @@ namespace VAUPDF
             }
         }
 
-        // Vahekaartide vahetamine
+        // ==============================================
+        // VAHEKAARTIDE VAHETAMINE
+        // ==============================================
+
         private void SwitchTab(int direction)
         {
             if (tabs.TabCount < 2)
                 return;
 
             tabs.SelectedIndex =
-                (tabs.SelectedIndex + direction + tabs.TabCount)
+                (tabs.SelectedIndex +
+                 direction +
+                 tabs.TabCount)
                 % tabs.TabCount;
         }
 
-        // Toetatud kiirklahvid
+        // ==============================================
+        // KLAVIATUURI KIIRKLAHVID
+        // ==============================================
+
         private bool IsShortcut(Keys key)
         {
             return key == (Keys.Control | Keys.O)
                 || key == (Keys.Control | Keys.P)
+                || key == (Keys.Control | Keys.Shift | Keys.S)
                 || key == (Keys.Control | Keys.W)
                 || key == (Keys.Control | Keys.Tab)
-                || key == (Keys.Control | Keys.Shift | Keys.Tab)
-                || key == Keys.F11
-                || (key == Keys.Escape && fullscreen);
+                || key == (
+                    Keys.Control |
+                    Keys.Shift |
+                    Keys.Tab);
         }
 
         private void ExecuteShortcut(Keys key)
@@ -393,6 +558,10 @@ namespace VAUPDF
                     PrintPdf();
                     break;
 
+                case Keys.Control | Keys.Shift | Keys.S:
+                    SavePdfAs();
+                    break;
+
                 case Keys.Control | Keys.W:
                     CloseTab(tabs.SelectedTab);
                     break;
@@ -404,20 +573,12 @@ namespace VAUPDF
                 case Keys.Control | Keys.Shift | Keys.Tab:
                     SwitchTab(-1);
                     break;
-
-                case Keys.F11:
-                    ToggleFullscreen();
-                    break;
-
-                case Keys.Escape:
-                    if (fullscreen)
-                        ToggleFullscreen();
-                    break;
             }
         }
 
         protected override bool ProcessCmdKey(
-            ref Message msg, Keys keyData)
+            ref Message msg,
+            Keys keyData)
         {
             if (IsShortcut(keyData))
             {
@@ -428,8 +589,10 @@ namespace VAUPDF
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        // WebView2 kiirklahvide edastamine
-        private void ViewerKeyDown(object? sender, KeyEventArgs e)
+        // WebView2 kiirklahvide töötlemine
+        private void ViewerKeyDown(
+            object? sender,
+            KeyEventArgs e)
         {
             if (!IsShortcut(e.KeyData))
                 return;
@@ -443,50 +606,27 @@ namespace VAUPDF
                 () => ExecuteShortcut(key)));
         }
 
-        // Täisekraan
-        private void ToggleFullscreen()
-        {
-            if (!fullscreen)
-            {
-                previousWindowState = WindowState;
-                previousBounds = RestoreBounds;
+        // ==============================================
+        // HILJUTISTE FAILIDE LUGEMINE
+        // ==============================================
 
-                WindowState = FormWindowState.Normal;
-                FormBorderStyle = FormBorderStyle.None;
-
-                toolbar.Visible = false;
-                statusbar.Visible = false;
-
-                WindowState = FormWindowState.Maximized;
-                fullscreen = true;
-            }
-            else
-            {
-                WindowState = FormWindowState.Normal;
-                FormBorderStyle = FormBorderStyle.Sizable;
-
-                Bounds = previousBounds;
-
-                toolbar.Visible = true;
-                statusbar.Visible = true;
-
-                WindowState = previousWindowState;
-                fullscreen = false;
-            }
-        }
-
-        // Hiljutiste failide lugemine
         private void LoadRecentFiles()
         {
             try
             {
-                if (File.Exists(RecentFilePath))
-                {
-                    var files = JsonSerializer.Deserialize<List<string>>(
+                if (!File.Exists(RecentFilePath))
+                    return;
+
+                var files =
+                    JsonSerializer.Deserialize<List<string>>(
                         File.ReadAllText(RecentFilePath));
 
-                    if (files != null)
-                        recentFiles.AddRange(files.Take(10));
+                if (files != null)
+                {
+                    recentFiles.AddRange(
+                        files.Where(
+                            p => !string.IsNullOrWhiteSpace(p))
+                        .Take(10));
                 }
             }
             catch
@@ -495,7 +635,10 @@ namespace VAUPDF
             }
         }
 
-        // Hiljutiste failide salvestamine
+        // ==============================================
+        // HILJUTISTE FAILIDE SALVESTAMINE
+        // ==============================================
+
         private void SaveRecentFiles()
         {
             try
@@ -504,7 +647,8 @@ namespace VAUPDF
 
                 File.WriteAllText(
                     RecentFilePath,
-                    JsonSerializer.Serialize(recentFiles,
+                    JsonSerializer.Serialize(
+                        recentFiles,
                         new JsonSerializerOptions
                         {
                             WriteIndented = true
@@ -520,25 +664,33 @@ namespace VAUPDF
         {
             recentFiles.RemoveAll(x =>
                 string.Equals(
-                    x, path,
+                    x,
+                    path,
                     StringComparison.OrdinalIgnoreCase));
 
             recentFiles.Insert(0, path);
 
             if (recentFiles.Count > 10)
+            {
                 recentFiles.RemoveRange(
-                    10, recentFiles.Count - 10);
+                    10,
+                    recentFiles.Count - 10);
+            }
 
             SaveRecentFiles();
             UpdateRecentMenu();
         }
 
-        // Hiljutiste failide menüü
+        // ==============================================
+        // HILJUTISTE FAILIDE MENÜÜ
+        // ==============================================
+
         private void UpdateRecentMenu()
         {
             while (recentMenu.DropDownItems.Count > 0)
             {
                 var item = recentMenu.DropDownItems[0];
+
                 recentMenu.DropDownItems.RemoveAt(0);
                 item.Dispose();
             }
@@ -561,7 +713,8 @@ namespace VAUPDF
             if (recentFiles.Count == 0)
             {
                 recentMenu.DropDownItems.Add(
-                    new ToolStripMenuItem("Nimekiri on tühi")
+                    new ToolStripMenuItem(
+                        "Nimekiri on tühi")
                     {
                         Enabled = false
                     });
@@ -585,39 +738,16 @@ namespace VAUPDF
             }
         }
 
-        // Drag & Drop
-        private void EnableDragDrop(Control control)
-        {
-            control.AllowDrop = true;
+        // ==============================================
+        // OLEKURIBA JA AKNA PEALKIRI
+        // ==============================================
 
-            control.DragEnter += (s, e) =>
-            {
-                e.Effect = DragDropEffects.None;
-
-                if (e.Data?.GetData(DataFormats.FileDrop)
-                    is string[] files &&
-                    files.Any(f => string.Equals(
-                        Path.GetExtension(f),
-                        ".pdf",
-                        StringComparison.OrdinalIgnoreCase)))
-                {
-                    e.Effect = DragDropEffects.Copy;
-                }
-            };
-
-            control.DragDrop += async (s, e) =>
-            {
-                if (e.Data?.GetData(DataFormats.FileDrop)
-                    is string[] files)
-                {
-                    await OpenFilesAsync(files);
-                }
-            };
-        }
-
-        // Olekuriba ja akna pealkiri
         private void UpdateStatus()
         {
+            closeMenu.Enabled = tabs.SelectedTab != null;
+            printButton.Enabled = ActiveViewer?.CoreWebView2 != null;
+            saveAsButton.Enabled = printButton.Enabled;
+
             Text = tabs.SelectedTab == null
                 ? "VAUPDF"
                 : $"VAUPDF - {tabs.SelectedTab.Text}";

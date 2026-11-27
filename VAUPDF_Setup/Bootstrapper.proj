@@ -1,0 +1,40 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+  <PropertyGroup>
+    <OutputPath Condition="'$(MsiPath)' != ''">$([System.IO.Path]::GetDirectoryName('$(MsiPath)'))</OutputPath>
+    <OutputPath Condition="'$(OutputPath)' == ''">$(MSBuildThisFileDirectory)Release</OutputPath>
+    <BootstrapperPath>$(MSBuildThisFileDirectory)obj\Bootstrapper</BootstrapperPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <BootstrapperFile Include="Microsoft.EdgeRuntime">
+      <ProductName>Microsoft Edge WebView2 Runtime</ProductName>
+    </BootstrapperFile>
+  </ItemGroup>
+  <Target Name="Build">
+    <ItemGroup>
+      <EngineFile Include="$(MSBuildProgramFiles32)\Microsoft SDKs\ClickOnce Bootstrapper\Engine\**\*" />
+      <RuntimeFile Include="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\BootstrapperPackages\WebViewRuntime\**\*" />
+    </ItemGroup>
+    <Error Condition="'@(EngineFile)' == '' or '@(RuntimeFile)' == ''"
+           Text="Install the Visual Studio ClickOnce bootstrapper and WebView2 prerequisite packages." />
+    <Copy SourceFiles="@(EngineFile)"
+          DestinationFiles="@(EngineFile->'$(BootstrapperPath)\Engine\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(RuntimeFile)"
+          DestinationFiles="@(RuntimeFile->'$(BootstrapperPath)\Packages\WebViewRuntime\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <XmlPoke XmlInputPath="$(BootstrapperPath)\Packages\WebViewRuntime\en\package.xml"
+             Namespaces="&lt;Namespace Prefix='b' Uri='http://schemas.microsoft.com/developer/2004/01/bootstrapper' /&gt;"
+             Query="/b:Package/b:Strings/b:String[@Name='WebViewRuntime']"
+             Value="https://go.microsoft.com/fwlink/p/?LinkId=2124703" />
+    <GenerateBootstrapper
+      ApplicationFile="VAUPDF_Setup.msi"
+      ApplicationName="VAUPDF"
+      BootstrapperItems="@(BootstrapperFile)"
+      ComponentsLocation="HomeSite"
+      CopyComponents="false"
+      Culture="en"
+      Path="$(BootstrapperPath)"
+      OutputPath="$(OutputPath)"
+      Validate="true" />
+  </Target>
+</Project>

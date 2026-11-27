@@ -1,4 +1,6 @@
 <Solution>
   <Project Path="VAUPDF/VAUPDF.csproj" />
-  <Project Path="VAUPDF_Setup/VAUPDF_Setup.vdproj" Type="Installer" />
+  <Project Path="VAUPDF_Setup/VAUPDF_Setup.vdproj" Type="Installer">
+    <Build />
+  </Project>
 </Solution>

@@ -6,22 +6,55 @@
 		<Nullable>enable</Nullable>
 		<UseWindowsForms>true</UseWindowsForms>
 		<ImplicitUsings>enable</ImplicitUsings>
+
 		<ApplicationIcon>VAUPDF.ico</ApplicationIcon>
-		<Version>0.3.0</Version>
+
+		<Version>1.0.0</Version>
+		<Product>VAUPDF</Product>
+		<AssemblyTitle>VAUPDF</AssemblyTitle>
+
+		<Description>
+			A lightweight open-source PDF viewer for Windows.
+		</Description>
+
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+		<RepositoryUrl>
+			https://github.com/kallekoort/VAUPDF
+		</RepositoryUrl>
+
+		<RepositoryType>git</RepositoryType>
+
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4370.26" />
+
+		<PackageReference
+		  Include="Microsoft.Web.WebView2"
+		  Version="1.0.4370.26" />
+
 	</ItemGroup>
 
-	<Target Name="RemoveWebView2WpfReference"
-			BeforeTargets="ResolveAssemblyReferences"
-			Condition="'$(UseWindowsForms)' == 'true' and '$(UseWPF)' != 'true'">
+	<!--
+    Eemaldab ebavajaliku WebView2 WPF viite,
+    mis põhjustab WindowsBase versioonikonflikti.
+  -->
+
+	<Target
+	  Name="RemoveWebView2WpfReference"
+	  BeforeTargets="ResolveAssemblyReferences"
+	  Condition="'$(UseWindowsForms)' == 'true' and '$(UseWPF)' != 'true'">
+
 		<ItemGroup>
-			<_WebView2WpfReference Include="@(Reference)"
-				Condition="'%(FileName)' == 'Microsoft.Web.WebView2.Wpf'" />
+
+			<_WebView2WpfReference
+			  Include="@(Reference)"
+			  Condition="'%(FileName)' == 'Microsoft.Web.WebView2.Wpf'" />
+
 			<Reference Remove="@(_WebView2WpfReference)" />
+
 		</ItemGroup>
+
 	</Target>
 
 </Project>
